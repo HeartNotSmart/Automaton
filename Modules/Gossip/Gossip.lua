@@ -272,6 +272,13 @@ function Automaton_Gossip:IsQuestLogFull()
 	return quests >= maxQuests
 end
 
+function Automaton_Gossip:NotifyQuestLogFull()
+	if DEFAULT_CHAT_FRAME then
+		DEFAULT_CHAT_FRAME:AddMessage("Quest Log full", 1, 0, 0)
+	end
+	PlaySound("igQuestFailed")
+end
+
 function Automaton_Gossip:QuestHasteSelectQuest(available, active, accept, complete)
 	for k = 1, table.getn(active) do
 		local quest = active[k]
@@ -292,6 +299,7 @@ function Automaton_Gossip:QuestHasteSelectQuest(available, active, accept, compl
 
 	if table.getn(available) > 0 then
 		if self:IsQuestLogFull() then
+			self:NotifyQuestLogFull()
 			return true
 		end
 		accept(available[1][2])
