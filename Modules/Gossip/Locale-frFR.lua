@@ -5,7 +5,7 @@ L:RegisterTranslations("frFR", function() return {
 	-- Gossip Menu
 	--------------
 	["Gossip"] = "Gossip", -- Need translation
-	["Automatically complete quests and skip gossip text"] = "Automatically complete quests and skip gossip text", -- Need translation
+	["Automatically skip gossip text"] = "Automatically skip gossip text", -- Need translation
 	["Enabled"] = "Enabled", -- Need translation
 	["Suspend/resume this module"] = "Suspend/resume this module", -- Need translation
 

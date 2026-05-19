@@ -5,7 +5,7 @@ L:RegisterTranslations("zhCN", function() return {
 	-- Gossip Menu
 	--------------
 	["Gossip"] = "Gossip", -- Need translation
-	["Automatically complete quests and skip gossip text"] = "还任务时自动跳过闲聊窗口，直接完成任务",
+	["Automatically skip gossip text"] = "Automatically skip gossip text", -- Need translation
 	["Enabled"] = "启用",
 	["Suspend/resume this module"] = "暂停/恢复该模块",
 

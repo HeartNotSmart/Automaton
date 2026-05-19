@@ -5,7 +5,7 @@ L:RegisterTranslations("ruRU", function() return {
 	-- Gossip Menu
 	--------------
 	["Gossip"] = "Болтовня",
-	["Automatically complete quests and skip gossip text"] = "Автоматическое завершение заданий и пропуск текстовой болтовни",
+	["Automatically skip gossip text"] = "Automatically skip gossip text",
 	["Enabled"] = "Вкл./Выкл.",
 	["Suspend/resume this module"] = "Приостановить/возобновить этот модуль",
 

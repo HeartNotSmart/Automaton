@@ -5,7 +5,7 @@ L:RegisterTranslations("enUS", function() return {
 	-- Gossip Menu
 	--------------
     ["Gossip"] = true,
-	["Automatically complete quests and skip gossip text"] = true,
+	["Automatically skip gossip text"] = true,
 	["Enabled"] = true,
 	["Suspend/resume this module"] = true,
 

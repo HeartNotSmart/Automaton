@@ -5,7 +5,7 @@ L:RegisterTranslations("koKR", function() return {
 	-- Gossip Menu
 	--------------
 	["Gossip"] = "잡담 무시",
-	["Automatically complete quests and skip gossip text"] = "퀘스트 자동 완료 및 NPC와의 잡담을 무시합니다.",
+	["Automatically skip gossip text"] = "Automatically skip gossip text",
 	["Enabled"] = "사용",
 	["Suspend/resume this module"] = "이 모듈을 사용하거나 사용하지 않습니다.",
 

@@ -49,6 +49,7 @@ Modules\Gossip\Locale-koKR.lua
 Modules\Gossip\Locale-zhCN.lua
 Modules\Gossip\Gossip.lua
 Modules\Gossip\GossipData.lua
+Modules\Quest.lua
 Modules\Group.lua
 Modules\Invite.lua
 Modules\Loner.lua
