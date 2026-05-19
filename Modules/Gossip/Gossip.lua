@@ -13,7 +13,7 @@ local QuestData = {}
 ----------------------------------
 
 Automaton_Gossip = Automaton:NewModule("Gossip")
-Automaton_Gossip.modulename = L["Gossip"]
+Automaton_Gossip.modulename = L["Gossip & Quest"]
 Automaton_Gossip.moduledesc = L["Automatically complete quests and skip gossip text"]
 Automaton_Gossip.options = {
 	questHaste = {
