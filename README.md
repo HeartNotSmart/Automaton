@@ -13,7 +13,7 @@ Reduces interface tedium by doing the little things for you
 ##### Clam - Search clam shells in inventory and open them after looting
 ##### Dismount - Automatically dismount, cancel forms druid, shaman, priest, when you receive the appropriate error
 ##### Filter - Always default to showing only available spells and skill at trainers
-##### Gossip - Navigates gossip and quest text for you. Includes an optional QuestHaste mode that accepts and completes all quests, with Shift pausing automation.
+##### Gossip & Quest - Navigates gossip and quest text for you. Hold Shift to pause automation.
 ##### Group - Automatically accepts group invites from anyone in your guild or friends list.
 ##### Invite - Options for sending players invites automatically via keywords.
 ##### Loner - Decline guild invites.
