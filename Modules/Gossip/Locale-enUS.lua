@@ -6,6 +6,8 @@ L:RegisterTranslations("enUS", function() return {
 	--------------
     ["Gossip"] = true,
 	["Gossip & Quest"] = true,
+	["Quest"] = true,
+	["Debug"] = true,
 	["Automatically complete quests and skip gossip text"] = true,
 	["Enabled"] = true,
 	["Suspend/resume this module"] = true,
