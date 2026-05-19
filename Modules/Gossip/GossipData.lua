@@ -27,9 +27,15 @@ function Automaton_Gossip:GetGossipData()
 	return {
 		["banker"] = {},
 		["battlemaster"] = {},
+		["binder"] = {},
+		["healer"] = {},
+		["petition"] = {},
+		["tabard"] = {},
 		["taxi"] = {},
-		["vendor"] = {},
 		["trainer"] = {},
+		["unlearn"] = {},
+		["vendor"] = {},
+		["workorder"] = {},
 		["gossip"] = {
 			L["<Touch the unstable rift crystal.>"], -- MC entrance
 			L["<Place my hand on the orb.>"], -- BWL entrance

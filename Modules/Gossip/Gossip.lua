@@ -63,25 +63,26 @@ end
 function Automaton_Gossip:GOSSIP_SHOW()
 	if IsShiftKeyDown() then return end
 
+	local gossipCount, gossipOptions = self:GetGossipOptionList()
+	self:Debug("GOSSIP_SHOW: "..gossipCount.." gossip options.")
+
+	if gossipCount == 1 and self:SelectSingleGossipOption(gossipOptions[1], gossipOptions[2]) then
+		return
+	end
+
+	local g = self:ProcessGossip(gossipCount, gossipOptions)
+
+	if self:SelectGossip(g, true) then
+		return
+	end
+
 	if self.db.profile.questHaste and self:QuestHasteGossip() then
+		self:Debug("Quest automation handled gossip event.")
 		return
 	end
 	
-	local g = self:ProcessGossip(GetGossipOptions())
-
-	if table.getn(g) > 1 then
-		self:Debug("Too many gossips to pick from, doing nothing.")
+	if self:SelectGossip(g) then
 		return
-	elseif table.getn(g) == 1 then
-		local z,_ = GetGossipAvailableQuests()
-		local x,_ = GetGossipActiveQuests()
-		if (x or z) and not (g[1][2] == "gossip") then
-			self:Debug("Not AutoGossiping because there's an available or active quest.")
-		else
-			self:Debug(g[1][1])
-			SelectGossipOption(g[1][3])
-			return
-		end
 	end
 
 	if self:CheckQuests(self:ProcessQuests(GetNumGossipActiveQuests(), 4, GetGossipActiveQuests()), SelectGossipActiveQuest) then
@@ -90,6 +91,65 @@ function Automaton_Gossip:GOSSIP_SHOW()
 	if self:CheckQuests(self:ProcessQuests(GetNumGossipAvailableQuests(), 3, GetGossipAvailableQuests()), SelectGossipAvailableQuest) then
 		return
 	end
+end
+
+function Automaton_Gossip:GetGossipOptionList()
+	local options = { GetGossipOptions() }
+	local count = 0
+	while options[count*2 + 1] do
+		count = count + 1
+	end
+
+	if GetNumGossipOptions then
+		count = GetNumGossipOptions() or count
+	end
+
+	return count, options
+end
+
+function Automaton_Gossip:HasGossipQuests()
+	local available = GetGossipAvailableQuests()
+	local active = GetGossipActiveQuests()
+	return available or active
+end
+
+function Automaton_Gossip:SelectSingleGossipOption(title, gossipType)
+	if gossipType then
+		gossipType = string.lower(gossipType)
+	end
+
+	if self:HasGossipQuests() and not (gossipType == "gossip") then
+		return false
+	end
+
+	self:Debug("Selecting only gossip option: "..tostring(title).." ("..tostring(gossipType)..")")
+	SelectGossipOption(1)
+	return true
+end
+
+function Automaton_Gossip:SelectGossip(gossips, gossipOnly)
+	if table.getn(gossips) > 1 then
+		if not gossipOnly then
+			self:Debug("Too many gossips to pick from, doing nothing.")
+		end
+		return false
+	elseif table.getn(gossips) == 1 then
+		if gossipOnly and not (gossips[1][2] == "gossip") then
+			return false
+		end
+
+		local z,_ = GetGossipAvailableQuests()
+		local x,_ = GetGossipActiveQuests()
+		if (x or z) and not (gossips[1][2] == "gossip") then
+			self:Debug("Not AutoGossiping because there's an available or active quest.")
+		else
+			self:Debug(gossips[1][1])
+			SelectGossipOption(gossips[1][3])
+			return true
+		end
+	end
+
+	return false
 end
 
 function Automaton_Gossip:QUEST_GREETING()
@@ -306,10 +366,6 @@ function Automaton_Gossip:QuestHasteSelectQuest(available, active, accept, compl
 		return true
 	end
 
-	if table.getn(active) > 0 then
-		return true
-	end
-
 	return false
 end
 
@@ -322,23 +378,53 @@ function Automaton_Gossip:QuestHasteCompleteReward()
 	end
 end
 
-function Automaton_Gossip:ProcessGossip(...)
-	local gossips = {}
-	for i = 1, table.getn(arg), 2 do
-		local title, type = arg[i], arg[i+1]
-		if GossipData[type] then
-			if table.getn(GossipData[type]) == 0 then
-				tinsert(gossips, {title, type, (i+1)/2})
-			else
-				for k,v in GossipData[type] do
-					if v == title then
-						tinsert(gossips, {title, type, (i+1)/2})
-					end
-				end
-			end
+function Automaton_Gossip:MatchesGossipData(data, title)
+	if table.getn(data) == 0 then
+		return true
+	end
+
+	for k,v in pairs(data) do
+		if v == title then
+			return true
 		end
 	end
-	return gossips
+
+	return false
+end
+
+function Automaton_Gossip:ProcessGossip(count, options)
+	local priorityGossips = {}
+	local gossips = {}
+	local services = {}
+	options = options or {}
+	count = count or table.getn(options) / 2
+	for k = 1, count do
+		local i = (k-1)*2 + 1
+		local title, gossipType = options[i], options[i+1]
+		if gossipType then
+			gossipType = string.lower(gossipType)
+		end
+		self:Debug("Gossip option "..k..": "..tostring(title).." ("..tostring(gossipType)..")")
+		if gossipType == "gossip" then
+			if GossipData[gossipType] and self:MatchesGossipData(GossipData[gossipType], title) then
+				tinsert(priorityGossips, {title, gossipType, k})
+			else
+				tinsert(gossips, {title, gossipType, k})
+			end
+		elseif GossipData[gossipType] and self:MatchesGossipData(GossipData[gossipType], title) then
+			tinsert(services, {title, gossipType, k})
+		end
+	end
+
+	if table.getn(priorityGossips) > 0 then
+		return priorityGossips
+	end
+
+	if table.getn(gossips) > 0 then
+		return gossips
+	end
+
+	return services
 end
 
 function Automaton_Gossip:ProcessQuests(count, stride, ...)
