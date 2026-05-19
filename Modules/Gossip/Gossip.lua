@@ -63,9 +63,14 @@ end
 function Automaton_Gossip:GOSSIP_SHOW()
 	if IsShiftKeyDown() then return end
 
-	local gossipCount = GetNumGossipOptions() or 0
+	local gossipCount, gossipOptions = self:GetGossipOptionList()
 	self:Debug("GOSSIP_SHOW: "..gossipCount.." gossip options.")
-	local g = self:ProcessGossip(gossipCount, GetGossipOptions())
+
+	if gossipCount == 1 and self:SelectSingleGossipOption(gossipOptions[1], gossipOptions[2]) then
+		return
+	end
+
+	local g = self:ProcessGossip(gossipCount, gossipOptions)
 
 	if self:SelectGossip(g, true) then
 		return
@@ -86,6 +91,40 @@ function Automaton_Gossip:GOSSIP_SHOW()
 	if self:CheckQuests(self:ProcessQuests(GetNumGossipAvailableQuests(), 3, GetGossipAvailableQuests()), SelectGossipAvailableQuest) then
 		return
 	end
+end
+
+function Automaton_Gossip:GetGossipOptionList()
+	local options = { GetGossipOptions() }
+	local count = 0
+	while options[count*2 + 1] do
+		count = count + 1
+	end
+
+	if GetNumGossipOptions then
+		count = GetNumGossipOptions() or count
+	end
+
+	return count, options
+end
+
+function Automaton_Gossip:HasGossipQuests()
+	local available = GetGossipAvailableQuests()
+	local active = GetGossipActiveQuests()
+	return available or active
+end
+
+function Automaton_Gossip:SelectSingleGossipOption(title, gossipType)
+	if gossipType then
+		gossipType = string.lower(gossipType)
+	end
+
+	if self:HasGossipQuests() and not (gossipType == "gossip") then
+		return false
+	end
+
+	self:Debug("Selecting only gossip option: "..tostring(title).." ("..tostring(gossipType)..")")
+	SelectGossipOption(1)
+	return true
 end
 
 function Automaton_Gossip:SelectGossip(gossips, gossipOnly)
@@ -353,14 +392,15 @@ function Automaton_Gossip:MatchesGossipData(data, title)
 	return false
 end
 
-function Automaton_Gossip:ProcessGossip(count, ...)
+function Automaton_Gossip:ProcessGossip(count, options)
 	local priorityGossips = {}
 	local gossips = {}
 	local services = {}
-	count = count or table.getn(arg) / 2
+	options = options or {}
+	count = count or table.getn(options) / 2
 	for k = 1, count do
 		local i = (k-1)*2 + 1
-		local title, gossipType = arg[i], arg[i+1]
+		local title, gossipType = options[i], options[i+1]
 		if gossipType then
 			gossipType = string.lower(gossipType)
 		end
