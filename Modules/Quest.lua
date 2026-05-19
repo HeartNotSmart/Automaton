@@ -12,21 +12,21 @@ local L = AceLibrary("AceLocale-2.2"):new("Automaton_Quest")
 
 L:RegisterTranslations("enUS", function() return {
 	["Quest"] = true,
-	["QuestHaste Mode"] = true,
+	["QuestHaste mode"] = true,
 	["Automatically accept and complete all quests."] = true,
 	["Automatically accept and complete all quests. Hold Shift to pause automation."] = true,
 } end)
 
 L:RegisterTranslations("ruRU", function() return {
 	["Quest"] = "Quest",
-	["QuestHaste Mode"] = "QuestHaste Mode",
+	["QuestHaste mode"] = "QuestHaste mode",
 	["Automatically accept and complete all quests."] = "Automatically accept and complete all quests.",
 	["Automatically accept and complete all quests. Hold Shift to pause automation."] = "Automatically accept and complete all quests. Hold Shift to pause automation.",
 } end)
 
 L:RegisterTranslations("koKR", function() return {
 	["Quest"] = "Quest",
-	["QuestHaste Mode"] = "QuestHaste Mode",
+	["QuestHaste mode"] = "QuestHaste mode",
 	["Automatically accept and complete all quests."] = "Automatically accept and complete all quests.",
 	["Automatically accept and complete all quests. Hold Shift to pause automation."] = "Automatically accept and complete all quests. Hold Shift to pause automation.",
 } end)
@@ -38,7 +38,7 @@ L:RegisterTranslations("koKR", function() return {
 Automaton_Quest = Automaton:NewModule("Quest")
 Automaton_Quest.modulename = L["Quest"]
 Automaton_Quest.moduledesc = L["Automatically accept and complete all quests."]
-Automaton_Quest.enabledname = L["QuestHaste Mode"]
+Automaton_Quest.enabledname = L["QuestHaste mode"]
 Automaton_Quest.enableddesc = L["Automatically accept and complete all quests. Hold Shift to pause automation."]
 Automaton_Quest.options = {}
 
