@@ -83,8 +83,8 @@ function Automaton.modulePrototype:RegisterOptions(options)
 	options.enabled = {
 		order = 1,
 		type = 'toggle',
-		name = L["Enabled"],
-		desc = L["Suspend/resume this module"],
+		name = self.enabledname or L["Enabled"],
+		desc = self.enableddesc or L["Suspend/resume this module"],
 		get = function() return Automaton:IsModuleActive(self.name) end,
 		set = function(v) Automaton:ToggleModuleActive(self.name, v) end,
 	}
