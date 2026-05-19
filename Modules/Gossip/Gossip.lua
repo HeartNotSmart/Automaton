@@ -84,10 +84,10 @@ function Automaton_Gossip:GOSSIP_SHOW()
 		end
 	end
 
-	if self:CheckQuests(self:ProcessQuests(4, GetGossipActiveQuests()), SelectGossipActiveQuest) then
+	if self:CheckQuests(self:ProcessQuests(GetNumGossipActiveQuests(), 4, GetGossipActiveQuests()), SelectGossipActiveQuest) then
 		return
 	end
-	if self:CheckQuests(self:ProcessQuests(3, GetGossipAvailableQuests()), SelectGossipAvailableQuest) then
+	if self:CheckQuests(self:ProcessQuests(GetNumGossipAvailableQuests(), 3, GetGossipAvailableQuests()), SelectGossipAvailableQuest) then
 		return
 	end
 end
@@ -154,18 +154,20 @@ function Automaton_Gossip:QUEST_COMPLETE()
 end
 
 function Automaton_Gossip:QuestHasteGossip()
-	if self:QuestHasteSelectQuest(self:ProcessAnyQuests(3, nil, GetGossipAvailableQuests()), self:ProcessAnyQuests(4, 3, GetGossipActiveQuests()), SelectGossipAvailableQuest, SelectGossipActiveQuest) then
+	if self:QuestHasteSelectQuest(self:ProcessAnyQuests(GetNumGossipAvailableQuests(), 3, nil, GetGossipAvailableQuests()), self:ProcessAnyQuests(GetNumGossipActiveQuests(), 4, 3, GetGossipActiveQuests()), SelectGossipAvailableQuest, SelectGossipActiveQuest) then
 		return true
 	end
 	return false
 end
 
-function Automaton_Gossip:ProcessAnyQuests(stride, completeOffset, ...)
+function Automaton_Gossip:ProcessAnyQuests(count, stride, completeOffset, ...)
 	local quests = {}
-	for i = 1, table.getn(arg), stride do
+	count = count or 0
+	for k = 1, count do
+		local i = (k-1)*stride + 1
 		local title = arg[i]
 		if title then
-			tinsert(quests, {title, (i+stride-1)/stride, completeOffset and arg[i+completeOffset]})
+			tinsert(quests, {title, k, completeOffset and arg[i+completeOffset]})
 		end
 	end
 	return quests
@@ -174,6 +176,7 @@ end
 function Automaton_Gossip:GetQuestLogEntryInfo(index)
 	local title, level, tag, group, header, complete, complete2 = GetQuestLogTitle(index)
 	local version, build, date, toc = GetBuildInfo()
+	toc = tonumber(toc)
 	if toc and toc >= 20000 and toc < 60000 then
 		return title, header, complete, complete2
 	end
@@ -209,6 +212,24 @@ function Automaton_Gossip:GetCompletedQuestLogTitles()
 	return completed
 end
 
+function Automaton_Gossip:IsQuestLogFull()
+	local entries, quests = GetNumQuestLogEntries()
+	local maxQuests = MAX_QUESTS or 20
+	entries = entries or 0
+
+	if not quests then
+		quests = 0
+		for k = 1, entries do
+			local title, isHeader = self:GetQuestLogEntryInfo(k)
+			if title and not isHeader then
+				quests = quests + 1
+			end
+		end
+	end
+
+	return quests >= maxQuests
+end
+
 function Automaton_Gossip:QuestHasteSelectQuest(available, active, accept, complete)
 	for k = 1, table.getn(active) do
 		local quest = active[k]
@@ -225,6 +246,11 @@ function Automaton_Gossip:QuestHasteSelectQuest(available, active, accept, compl
 			complete(quest[2])
 			return true
 		end
+	end
+
+	if table.getn(active) > 0 and self:IsQuestLogFull() then
+		complete(active[1][2])
+		return true
 	end
 
 	if table.getn(available) > 0 then
@@ -268,9 +294,11 @@ function Automaton_Gossip:ProcessGossip(...)
 	return gossips
 end
 
-function Automaton_Gossip:ProcessQuests(stride, ...)
+function Automaton_Gossip:ProcessQuests(count, stride, ...)
 	local quests = {}
-	for i = 1, table.getn(arg), stride do
+	count = count or 0
+	for k = 1, count do
+		local i = (k-1)*stride + 1
 		local title, level = arg[i], arg[i+1]
 		if QuestData[title] then
 			local good = true
@@ -291,7 +319,7 @@ function Automaton_Gossip:ProcessQuests(stride, ...)
 				end
 			end
 			if good then
-				tinsert(quests, {title, level, (i+stride-1)/stride})
+				tinsert(quests, {title, level, k})
 			end
 		end
 	end
