@@ -84,10 +84,10 @@ function Automaton_Gossip:GOSSIP_SHOW()
 		end
 	end
 
-	if self:CheckQuests(self:ProcessQuests(GetGossipActiveQuests()), SelectGossipActiveQuest) then
+	if self:CheckQuests(self:ProcessQuests(GetNumGossipActiveQuests(), 4, GetGossipActiveQuests()), SelectGossipActiveQuest) then
 		return
 	end
-	if self:CheckQuests(self:ProcessQuests(GetGossipAvailableQuests()), SelectGossipAvailableQuest) then
+	if self:CheckQuests(self:ProcessQuests(GetNumGossipAvailableQuests(), 3, GetGossipAvailableQuests()), SelectGossipAvailableQuest) then
 		return
 	end
 end
@@ -102,7 +102,8 @@ function Automaton_Gossip:QUEST_GREETING()
 		tinsert(available, {GetAvailableTitle(k), k})
 	end
 	for k = 1, GetNumActiveQuests() do
-		tinsert(active, {GetActiveTitle(k), k})
+		local title, isComplete = GetActiveTitle(k)
+		tinsert(active, {title, k, isComplete})
 	end
 
 	self:QuestHasteSelectQuest(available, active, SelectAvailableQuest, SelectActiveQuest)
@@ -153,37 +154,141 @@ function Automaton_Gossip:QUEST_COMPLETE()
 end
 
 function Automaton_Gossip:QuestHasteGossip()
-	if self:QuestHasteSelectQuest(self:ProcessAnyQuests(GetGossipAvailableQuests()), self:ProcessAnyQuests(GetGossipActiveQuests()), SelectGossipAvailableQuest, SelectGossipActiveQuest) then
+	if self:QuestHasteSelectQuest(self:ProcessAnyQuests(GetNumGossipAvailableQuests(), 3, nil, GetGossipAvailableQuests()), self:ProcessAnyQuests(GetNumGossipActiveQuests(), 4, 3, GetGossipActiveQuests()), SelectGossipAvailableQuest, SelectGossipActiveQuest) then
 		return true
 	end
 	return false
 end
 
-function Automaton_Gossip:ProcessAnyQuests(...)
+function Automaton_Gossip:ProcessAnyQuests(count, stride, completeOffset, ...)
 	local quests = {}
-	for i = 1, table.getn(arg), 3 do
+	count = count or 0
+	for k = 1, count do
+		local i = (k-1)*stride + 1
 		local title = arg[i]
 		if title then
-			tinsert(quests, {title, (i+2)/3})
+			tinsert(quests, {title, k, completeOffset and arg[i+completeOffset]})
 		end
 	end
 	return quests
 end
 
+function Automaton_Gossip:GetQuestLogEntryInfo(index)
+	local title, level, tag, isHeader, isCollapsed, isComplete = GetQuestLogTitle(index)
+	return title, isHeader, isCollapsed, isComplete
+end
+
+function Automaton_Gossip:IsCompleteValue(value)
+	return value == true or value == 1
+end
+
+function Automaton_Gossip:HasRequiredItems(items)
+	if not items then
+		return true
+	end
+
+	for item, quantity in pairs(items) do
+		if (tonumber(self:SearchBagsForQuantity(item)) or 0) < quantity then
+			return false
+		end
+	end
+
+	return true
+end
+
+function Automaton_Gossip:HasRequiredQuestItems(title)
+	local data = QuestData[title]
+	if not data then
+		return true
+	end
+
+	local faction = UnitFactionGroup("player")
+	if faction and not self:HasRequiredItems(data[faction]) then
+		return false
+	end
+
+	return self:HasRequiredItems(data.items)
+end
+
+function Automaton_Gossip:IsQuestLogEntryComplete(index, title, isHeader, isComplete)
+	if not title or isHeader or not self:IsCompleteValue(isComplete) then
+		return false
+	end
+
+	for k = 1, (GetNumQuestLeaderBoards(index) or 0) do
+		local text, objectiveType, finished = GetQuestLogLeaderBoard(k, index)
+		if text and not self:IsCompleteValue(finished) then
+			return false
+		end
+	end
+
+	return self:HasRequiredQuestItems(title)
+end
+
 function Automaton_Gossip:GetCompletedQuestLogTitles()
 	local completed = {}
+	local collapsed = {}
+
+	for k = GetNumQuestLogEntries(), 1, -1 do
+		local title, isHeader, isCollapsed = self:GetQuestLogEntryInfo(k)
+		if title and isHeader and isCollapsed then
+			collapsed[title] = true
+			ExpandQuestHeader(k)
+		end
+	end
+
 	for k = 1, GetNumQuestLogEntries() do
-		local title, level, tag, group, header, isComplete = GetQuestLogTitle(k)
-		if title and isComplete then
+		local title, isHeader, isCollapsed, isComplete = self:GetQuestLogEntryInfo(k)
+		if self:IsQuestLogEntryComplete(k, title, isHeader, isComplete) then
 			completed[title] = true
 		end
 	end
+
+	for k = GetNumQuestLogEntries(), 1, -1 do
+		local title, isHeader = self:GetQuestLogEntryInfo(k)
+		if title and isHeader and collapsed[title] then
+			CollapseQuestHeader(k)
+		end
+	end
+
 	return completed
 end
 
-function Automaton_Gossip:QuestHasteSelectQuest(available, active, accept, complete)
-	local completed = self:GetCompletedQuestLogTitles()
+function Automaton_Gossip:IsQuestLogFull()
+	local entries, quests = GetNumQuestLogEntries()
+	local maxQuests = MAX_QUESTS or 20
+	entries = entries or 0
 
+	if not quests then
+		quests = 0
+		for k = 1, entries do
+			local title, isHeader = self:GetQuestLogEntryInfo(k)
+			if title and not isHeader then
+				quests = quests + 1
+			end
+		end
+	end
+
+	return quests >= maxQuests
+end
+
+function Automaton_Gossip:NotifyQuestLogFull()
+	if DEFAULT_CHAT_FRAME then
+		DEFAULT_CHAT_FRAME:AddMessage("Quest Log full", 1, 0, 0)
+	end
+	PlaySound("igQuestFailed")
+end
+
+function Automaton_Gossip:QuestHasteSelectQuest(available, active, accept, complete)
+	for k = 1, table.getn(active) do
+		local quest = active[k]
+		if self:IsCompleteValue(quest[3]) and self:HasRequiredQuestItems(quest[1]) then
+			complete(quest[2])
+			return true
+		end
+	end
+
+	local completed = self:GetCompletedQuestLogTitles()
 	for k = 1, table.getn(active) do
 		local quest = active[k]
 		if completed[quest[1]] then
@@ -193,12 +298,15 @@ function Automaton_Gossip:QuestHasteSelectQuest(available, active, accept, compl
 	end
 
 	if table.getn(available) > 0 then
+		if self:IsQuestLogFull() then
+			self:NotifyQuestLogFull()
+			return true
+		end
 		accept(available[1][2])
 		return true
 	end
 
 	if table.getn(active) > 0 then
-		complete(active[1][2])
 		return true
 	end
 
@@ -233,30 +341,15 @@ function Automaton_Gossip:ProcessGossip(...)
 	return gossips
 end
 
-function Automaton_Gossip:ProcessQuests(...)
+function Automaton_Gossip:ProcessQuests(count, stride, ...)
 	local quests = {}
-	for i = 1, table.getn(arg), 3 do
+	count = count or 0
+	for k = 1, count do
+		local i = (k-1)*stride + 1
 		local title, level = arg[i], arg[i+1]
 		if QuestData[title] then
-			local good = true
-			if QuestData[title][faction] then
-				for k, v in pairs(QuestData[title][faction]) do
-					if tonumber(self:SearchBagsForQuantity(k)) < v then
-						good = false
-						break
-					end
-				end
-			end
-			if QuestData[title].items then
-				for k, v in QuestData[title].items do
-					if tonumber(self:SearchBagsForQuantity(k)) < v then
-						good = false
-						break
-					end
-				end
-			end
-			if good then
-				tinsert(quests, {title, level, (i+2)/3})
+			if self:HasRequiredQuestItems(title) then
+				tinsert(quests, {title, level, k})
 			end
 		end
 	end
