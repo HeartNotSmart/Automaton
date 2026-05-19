@@ -19,7 +19,7 @@ Automaton_Gossip.options = {
 	questHaste = {
 		order = 2,
 		type = "toggle",
-		name = "QuestHaste mode",
+		name = L["Quest"],
 		desc = "Automatically accept and complete all quests. Hold Shift to pause automation.",
 		get = function() return Automaton_Gossip.db.profile.questHaste end,
 		set = function(v) Automaton_Gossip.db.profile.questHaste = v end,
@@ -40,6 +40,8 @@ function Automaton_Gossip:OnInitialize()
 	QuestData = Automaton_Gossip:GetQuestData()
 
 	self:RegisterOptions(self.options)
+	self.options.enabled.name = L["Gossip"]
+	self.options.debugging.name = L["Debug"]
 end
 
 function Automaton_Gossip:OnEnable()
