@@ -306,10 +306,6 @@ function Automaton_Gossip:QuestHasteSelectQuest(available, active, accept, compl
 		return true
 	end
 
-	if table.getn(active) > 0 then
-		return true
-	end
-
 	return false
 end
 
@@ -322,23 +318,46 @@ function Automaton_Gossip:QuestHasteCompleteReward()
 	end
 end
 
-function Automaton_Gossip:ProcessGossip(...)
-	local gossips = {}
-	for i = 1, table.getn(arg), 2 do
-		local title, type = arg[i], arg[i+1]
-		if GossipData[type] then
-			if table.getn(GossipData[type]) == 0 then
-				tinsert(gossips, {title, type, (i+1)/2})
-			else
-				for k,v in GossipData[type] do
-					if v == title then
-						tinsert(gossips, {title, type, (i+1)/2})
-					end
-				end
-			end
+function Automaton_Gossip:MatchesGossipData(data, title)
+	if table.getn(data) == 0 then
+		return true
+	end
+
+	for k,v in pairs(data) do
+		if v == title then
+			return true
 		end
 	end
-	return gossips
+
+	return false
+end
+
+function Automaton_Gossip:ProcessGossip(...)
+	local priorityGossips = {}
+	local gossips = {}
+	local services = {}
+	for i = 1, table.getn(arg), 2 do
+		local title, gossipType = arg[i], arg[i+1]
+		if gossipType == "gossip" then
+			if GossipData[gossipType] and self:MatchesGossipData(GossipData[gossipType], title) then
+				tinsert(priorityGossips, {title, gossipType, (i+1)/2})
+			else
+				tinsert(gossips, {title, gossipType, (i+1)/2})
+			end
+		elseif GossipData[gossipType] and self:MatchesGossipData(GossipData[gossipType], title) then
+			tinsert(services, {title, gossipType, (i+1)/2})
+		end
+	end
+
+	if table.getn(priorityGossips) > 0 then
+		return priorityGossips
+	end
+
+	if table.getn(gossips) > 0 then
+		return gossips
+	end
+
+	return services
 end
 
 function Automaton_Gossip:ProcessQuests(count, stride, ...)
