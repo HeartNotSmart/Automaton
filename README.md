@@ -29,3 +29,7 @@ Reduces interface tedium by doing the little things for you
 ##### Stand - Automatically stand when you receive the 'You must be standing' error
 ##### Summon - Accepts summons automatically.
 ##### Wuss - Supress duel invitations by declining them, like the wuss you are.
+
+<img width="436" height="102" alt="Automaton Auto Quest Feature" src="https://github.com/user-attachments/assets/e9b80b97-32da-4cba-a75b-1879907767c0" />
+
+<img width="931" height="851" alt="Automaton Menu" src="https://github.com/user-attachments/assets/1d7ba8a5-6775-4679-99c1-e69cfec94355" />
