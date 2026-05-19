@@ -84,10 +84,10 @@ function Automaton_Gossip:GOSSIP_SHOW()
 		end
 	end
 
-	if self:CheckQuests(self:ProcessQuests(GetGossipActiveQuests()), SelectGossipActiveQuest) then
+	if self:CheckQuests(self:ProcessQuests(4, GetGossipActiveQuests()), SelectGossipActiveQuest) then
 		return
 	end
-	if self:CheckQuests(self:ProcessQuests(GetGossipAvailableQuests()), SelectGossipAvailableQuest) then
+	if self:CheckQuests(self:ProcessQuests(3, GetGossipAvailableQuests()), SelectGossipAvailableQuest) then
 		return
 	end
 end
@@ -102,7 +102,8 @@ function Automaton_Gossip:QUEST_GREETING()
 		tinsert(available, {GetAvailableTitle(k), k})
 	end
 	for k = 1, GetNumActiveQuests() do
-		tinsert(active, {GetActiveTitle(k), k})
+		local title, isComplete = GetActiveTitle(k)
+		tinsert(active, {title, k, isComplete})
 	end
 
 	self:QuestHasteSelectQuest(available, active, SelectAvailableQuest, SelectActiveQuest)
@@ -153,37 +154,71 @@ function Automaton_Gossip:QUEST_COMPLETE()
 end
 
 function Automaton_Gossip:QuestHasteGossip()
-	if self:QuestHasteSelectQuest(self:ProcessAnyQuests(GetGossipAvailableQuests()), self:ProcessAnyQuests(GetGossipActiveQuests()), SelectGossipAvailableQuest, SelectGossipActiveQuest) then
+	if self:QuestHasteSelectQuest(self:ProcessAnyQuests(3, nil, GetGossipAvailableQuests()), self:ProcessAnyQuests(4, 3, GetGossipActiveQuests()), SelectGossipAvailableQuest, SelectGossipActiveQuest) then
 		return true
 	end
 	return false
 end
 
-function Automaton_Gossip:ProcessAnyQuests(...)
+function Automaton_Gossip:ProcessAnyQuests(stride, completeOffset, ...)
 	local quests = {}
-	for i = 1, table.getn(arg), 3 do
+	for i = 1, table.getn(arg), stride do
 		local title = arg[i]
 		if title then
-			tinsert(quests, {title, (i+2)/3})
+			tinsert(quests, {title, (i+stride-1)/stride, completeOffset and arg[i+completeOffset]})
 		end
 	end
 	return quests
 end
 
+function Automaton_Gossip:GetQuestLogEntryInfo(index)
+	local title, level, tag, group, header, complete, complete2 = GetQuestLogTitle(index)
+	local version, build, date, toc = GetBuildInfo()
+	if toc and toc >= 20000 and toc < 60000 then
+		return title, header, complete, complete2
+	end
+	return title, group, header, complete
+end
+
 function Automaton_Gossip:GetCompletedQuestLogTitles()
 	local completed = {}
+	local collapsed = {}
+
+	for k = GetNumQuestLogEntries(), 1, -1 do
+		local title, isHeader, isCollapsed = self:GetQuestLogEntryInfo(k)
+		if title and isHeader and isCollapsed then
+			collapsed[title] = true
+			ExpandQuestHeader(k)
+		end
+	end
+
 	for k = 1, GetNumQuestLogEntries() do
-		local title, level, tag, group, header, isComplete = GetQuestLogTitle(k)
-		if title and isComplete then
+		local title, isHeader, isCollapsed, isComplete = self:GetQuestLogEntryInfo(k)
+		if title and not isHeader and isComplete then
 			completed[title] = true
 		end
 	end
+
+	for k = GetNumQuestLogEntries(), 1, -1 do
+		local title, isHeader = self:GetQuestLogEntryInfo(k)
+		if title and isHeader and collapsed[title] then
+			CollapseQuestHeader(k)
+		end
+	end
+
 	return completed
 end
 
 function Automaton_Gossip:QuestHasteSelectQuest(available, active, accept, complete)
-	local completed = self:GetCompletedQuestLogTitles()
+	for k = 1, table.getn(active) do
+		local quest = active[k]
+		if quest[3] then
+			complete(quest[2])
+			return true
+		end
+	end
 
+	local completed = self:GetCompletedQuestLogTitles()
 	for k = 1, table.getn(active) do
 		local quest = active[k]
 		if completed[quest[1]] then
@@ -233,9 +268,9 @@ function Automaton_Gossip:ProcessGossip(...)
 	return gossips
 end
 
-function Automaton_Gossip:ProcessQuests(...)
+function Automaton_Gossip:ProcessQuests(stride, ...)
 	local quests = {}
-	for i = 1, table.getn(arg), 3 do
+	for i = 1, table.getn(arg), stride do
 		local title, level = arg[i], arg[i+1]
 		if QuestData[title] then
 			local good = true
@@ -256,7 +291,7 @@ function Automaton_Gossip:ProcessQuests(...)
 				end
 			end
 			if good then
-				tinsert(quests, {title, level, (i+2)/3})
+				tinsert(quests, {title, level, (i+stride-1)/stride})
 			end
 		end
 	end
