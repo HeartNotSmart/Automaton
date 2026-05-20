@@ -8,6 +8,29 @@ local L = AceLibrary("AceLocale-2.2"):new("Automaton_Gossip")
 local GossipData = {}
 local QuestData = {}
 
+local function GetGossipQuestList(counter, getter, stride)
+	local quests = {}
+	if getter then
+		quests = { getter() }
+	end
+
+	local count
+	if counter then
+		count = counter() or 0
+	end
+
+	local inferred = 0
+	while quests[inferred*stride + 1] do
+		inferred = inferred + 1
+	end
+
+	if not count or count < inferred then
+		count = inferred
+	end
+
+	return count or 0, quests
+end
+
 ----------------------------------
 --      Module Declaration      --
 ----------------------------------
@@ -85,10 +108,13 @@ function Automaton_Gossip:GOSSIP_SHOW()
 		return
 	end
 
-	if self:CheckQuests(self:ProcessQuests(GetNumGossipActiveQuests(), 4, GetGossipActiveQuests()), SelectGossipActiveQuest) then
+	local activeCount, activeQuests = self:GetGossipActiveQuestList()
+	if self:CheckQuests(self:ProcessQuestList(activeCount, 4, activeQuests), SelectGossipActiveQuest) then
 		return
 	end
-	if self:CheckQuests(self:ProcessQuests(GetNumGossipAvailableQuests(), 3, GetGossipAvailableQuests()), SelectGossipAvailableQuest) then
+
+	local availableCount, availableQuests = self:GetGossipAvailableQuestList()
+	if self:CheckQuests(self:ProcessQuestList(availableCount, 3, availableQuests), SelectGossipAvailableQuest) then
 		return
 	end
 end
@@ -107,10 +133,18 @@ function Automaton_Gossip:GetGossipOptionList()
 	return count, options
 end
 
+function Automaton_Gossip:GetGossipAvailableQuestList()
+	return GetGossipQuestList(GetNumGossipAvailableQuests, GetGossipAvailableQuests, 3)
+end
+
+function Automaton_Gossip:GetGossipActiveQuestList()
+	return GetGossipQuestList(GetNumGossipActiveQuests, GetGossipActiveQuests, 4)
+end
+
 function Automaton_Gossip:HasGossipQuests()
-	local available = GetGossipAvailableQuests()
-	local active = GetGossipActiveQuests()
-	return available or active
+	local available = self:GetGossipAvailableQuestList()
+	local active = self:GetGossipActiveQuestList()
+	return available > 0 or active > 0
 end
 
 function Automaton_Gossip:SelectSingleGossipOption(title, gossipType)
@@ -138,9 +172,9 @@ function Automaton_Gossip:SelectGossip(gossips, gossipOnly)
 			return false
 		end
 
-		local z,_ = GetGossipAvailableQuests()
-		local x,_ = GetGossipActiveQuests()
-		if (x or z) and not (gossips[1][2] == "gossip") then
+		local z = self:GetGossipAvailableQuestList()
+		local x = self:GetGossipActiveQuestList()
+		if (x > 0 or z > 0) and not (gossips[1][2] == "gossip") then
 			self:Debug("Not AutoGossiping because there's an available or active quest.")
 		else
 			self:Debug(gossips[1][1])
@@ -214,23 +248,30 @@ function Automaton_Gossip:QUEST_COMPLETE()
 end
 
 function Automaton_Gossip:QuestHasteGossip()
-	if self:QuestHasteSelectQuest(self:ProcessAnyQuests(GetNumGossipAvailableQuests(), 3, nil, GetGossipAvailableQuests()), self:ProcessAnyQuests(GetNumGossipActiveQuests(), 4, 3, GetGossipActiveQuests()), SelectGossipAvailableQuest, SelectGossipActiveQuest) then
+	local availableCount, availableQuests = self:GetGossipAvailableQuestList()
+	local activeCount, activeQuests = self:GetGossipActiveQuestList()
+	if self:QuestHasteSelectQuest(self:ProcessAnyQuestList(availableCount, 3, nil, availableQuests), self:ProcessAnyQuestList(activeCount, 4, 3, activeQuests), SelectGossipAvailableQuest, SelectGossipActiveQuest) then
 		return true
 	end
 	return false
 end
 
-function Automaton_Gossip:ProcessAnyQuests(count, stride, completeOffset, ...)
+function Automaton_Gossip:ProcessAnyQuestList(count, stride, completeOffset, values)
 	local quests = {}
+	values = values or {}
 	count = count or 0
 	for k = 1, count do
 		local i = (k-1)*stride + 1
-		local title = arg[i]
+		local title = values[i]
 		if title then
-			tinsert(quests, {title, k, completeOffset and arg[i+completeOffset]})
+			tinsert(quests, {title, k, completeOffset and values[i+completeOffset]})
 		end
 	end
 	return quests
+end
+
+function Automaton_Gossip:ProcessAnyQuests(count, stride, completeOffset, ...)
+	return self:ProcessAnyQuestList(count, stride, completeOffset, arg)
 end
 
 function Automaton_Gossip:GetQuestLogEntryInfo(index)
@@ -427,12 +468,13 @@ function Automaton_Gossip:ProcessGossip(count, options)
 	return services
 end
 
-function Automaton_Gossip:ProcessQuests(count, stride, ...)
+function Automaton_Gossip:ProcessQuestList(count, stride, values)
 	local quests = {}
+	values = values or {}
 	count = count or 0
 	for k = 1, count do
 		local i = (k-1)*stride + 1
-		local title, level = arg[i], arg[i+1]
+		local title, level = values[i], values[i+1]
 		if QuestData[title] then
 			if self:HasRequiredQuestItems(title) then
 				tinsert(quests, {title, level, k})
@@ -440,6 +482,10 @@ function Automaton_Gossip:ProcessQuests(count, stride, ...)
 		end
 	end
 	return quests
+end
+
+function Automaton_Gossip:ProcessQuests(count, stride, ...)
+	return self:ProcessQuestList(count, stride, arg)
 end
 
 function Automaton_Gossip:CheckQuests(quests, func)
