@@ -7,6 +7,11 @@ assert(Automaton, "Automaton not found!")
 local L = AceLibrary("AceLocale-2.2"):new("Automaton_Gossip")
 local GossipData = {}
 local QuestData = {}
+local PreferredGossipTypes = {"trainer", "vendor"}
+local UnsafeGossipTypes = {
+	["binder"] = true,
+	["unlearn"] = true,
+}
 
 local function GetGossipQuestList(counter, getter, stride)
 	local quests = {}
@@ -89,6 +94,16 @@ function Automaton_Gossip:GOSSIP_SHOW()
 	local gossipCount, gossipOptions = self:GetGossipOptionList()
 	self:Debug("GOSSIP_SHOW: "..gossipCount.." gossip options.")
 
+	if self.db.profile.questHaste and self:QuestHasteGossip() then
+		self:Debug("Quest automation handled gossip event.")
+		return
+	end
+
+	if self.db.profile.questHaste then
+		self:SelectGossipOptionAfterQuests(gossipCount, gossipOptions)
+		return
+	end
+
 	if gossipCount == 1 and self:SelectSingleGossipOption(gossipOptions[1], gossipOptions[2]) then
 		return
 	end
@@ -99,17 +114,12 @@ function Automaton_Gossip:GOSSIP_SHOW()
 		return
 	end
 
-	if self.db.profile.questHaste and self:QuestHasteGossip() then
-		self:Debug("Quest automation handled gossip event.")
-		return
-	end
-	
 	if self:SelectGossip(g) then
 		return
 	end
 
 	local activeCount, activeQuests = self:GetGossipActiveQuestList()
-	if self:CheckQuests(self:ProcessQuestList(activeCount, 4, activeQuests), SelectGossipActiveQuest) then
+	if self:CheckQuests(self:ProcessQuestList(activeCount, 4, activeQuests, 3), SelectGossipActiveQuest) then
 		return
 	end
 
@@ -161,6 +171,70 @@ function Automaton_Gossip:SelectSingleGossipOption(title, gossipType)
 	return true
 end
 
+function Automaton_Gossip:NormalizeGossipType(gossipType)
+	if gossipType then
+		return string.lower(gossipType)
+	end
+end
+
+function Automaton_Gossip:IsUnsafeGossipType(gossipType)
+	return UnsafeGossipTypes[self:NormalizeGossipType(gossipType)]
+end
+
+function Automaton_Gossip:SelectGossipOptionByIndex(index, title, gossipType)
+	self:Debug("AutoGossip: "..tostring(title).." ("..tostring(gossipType)..")")
+	SelectGossipOption(index)
+	return true
+end
+
+function Automaton_Gossip:SelectGossipOptionByType(count, options, wantedType)
+	options = options or {}
+	count = count or table.getn(options) / 2
+	for k = 1, count do
+		local i = (k-1)*2 + 1
+		local title, gossipType = options[i], self:NormalizeGossipType(options[i+1])
+		if title and gossipType == wantedType then
+			return self:SelectGossipOptionByIndex(k, title, gossipType)
+		end
+	end
+	return false
+end
+
+function Automaton_Gossip:HasUnsafeGossipOption(count, options)
+	options = options or {}
+	count = count or table.getn(options) / 2
+	for k = 1, count do
+		local i = (k-1)*2 + 1
+		if options[i] and self:IsUnsafeGossipType(options[i+1]) then
+			return true
+		end
+	end
+	return false
+end
+
+function Automaton_Gossip:SelectGossipOptionAfterQuests(count, options)
+	options = options or {}
+	count = count or table.getn(options) / 2
+
+	if self:HasUnsafeGossipOption(count, options) then
+		for k = 1, table.getn(PreferredGossipTypes) do
+			if self:SelectGossipOptionByType(count, options, PreferredGossipTypes[k]) then
+				return true
+			end
+		end
+	end
+
+	for k = 1, count do
+		local i = (k-1)*2 + 1
+		local title, gossipType = options[i], self:NormalizeGossipType(options[i+1])
+		if title and not self:IsUnsafeGossipType(gossipType) then
+			return self:SelectGossipOptionByIndex(k, title, gossipType)
+		end
+	end
+
+	return false
+end
+
 function Automaton_Gossip:SelectGossip(gossips, gossipOnly)
 	if table.getn(gossips) > 1 then
 		if not gossipOnly then
@@ -200,7 +274,7 @@ function Automaton_Gossip:QUEST_GREETING()
 		tinsert(active, {title, k, isComplete})
 	end
 
-	self:QuestHasteSelectQuest(available, active, SelectAvailableQuest, SelectActiveQuest)
+	self:QuestHasteSelectQuest(active, available, SelectActiveQuest, SelectAvailableQuest)
 end
 
 function Automaton_Gossip:QUEST_DETAIL()
@@ -250,7 +324,7 @@ end
 function Automaton_Gossip:QuestHasteGossip()
 	local availableCount, availableQuests = self:GetGossipAvailableQuestList()
 	local activeCount, activeQuests = self:GetGossipActiveQuestList()
-	if self:QuestHasteSelectQuest(self:ProcessAnyQuestList(availableCount, 3, nil, availableQuests), self:ProcessAnyQuestList(activeCount, 4, 3, activeQuests), SelectGossipAvailableQuest, SelectGossipActiveQuest) then
+	if self:QuestHasteSelectQuest(self:ProcessAnyQuestList(activeCount, 4, 3, activeQuests), self:ProcessAnyQuestList(availableCount, 3, nil, availableQuests), SelectGossipActiveQuest, SelectGossipAvailableQuest) then
 		return true
 	end
 	return false
@@ -326,7 +400,8 @@ function Automaton_Gossip:IsQuestLogEntryComplete(index, title, isHeader, isComp
 	return self:HasRequiredQuestItems(title)
 end
 
-function Automaton_Gossip:GetCompletedQuestLogTitles()
+function Automaton_Gossip:GetQuestLogCompletionMap()
+	local known = {}
 	local completed = {}
 	local collapsed = {}
 
@@ -340,8 +415,11 @@ function Automaton_Gossip:GetCompletedQuestLogTitles()
 
 	for k = 1, GetNumQuestLogEntries() do
 		local title, isHeader, isCollapsed, isComplete = self:GetQuestLogEntryInfo(k)
-		if self:IsQuestLogEntryComplete(k, title, isHeader, isComplete) then
-			completed[title] = true
+		if title and not isHeader then
+			known[title] = true
+			if self:IsQuestLogEntryComplete(k, title, isHeader, isComplete) then
+				completed[title] = true
+			end
 		end
 	end
 
@@ -352,7 +430,33 @@ function Automaton_Gossip:GetCompletedQuestLogTitles()
 		end
 	end
 
+	return completed, known
+end
+
+function Automaton_Gossip:GetCompletedQuestLogTitles()
+	local completed = self:GetQuestLogCompletionMap()
 	return completed
+end
+
+function Automaton_Gossip:IsActiveQuestCompletable(quest, completed, known, completeValue)
+	local title = quest and quest[1]
+	if not title or not self:HasRequiredQuestItems(title) then
+		return false
+	end
+
+	if completed and completed[title] then
+		return true
+	end
+
+	if known and known[title] then
+		return false
+	end
+
+	if completeValue == nil then
+		completeValue = quest[3]
+	end
+
+	return self:IsCompleteValue(completeValue)
 end
 
 function Automaton_Gossip:IsQuestLogFull()
@@ -380,19 +484,12 @@ function Automaton_Gossip:NotifyQuestLogFull()
 	PlaySound("igQuestFailed")
 end
 
-function Automaton_Gossip:QuestHasteSelectQuest(available, active, accept, complete)
-	for k = 1, table.getn(active) do
-		local quest = active[k]
-		if self:IsCompleteValue(quest[3]) and self:HasRequiredQuestItems(quest[1]) then
-			complete(quest[2])
-			return true
-		end
-	end
+function Automaton_Gossip:QuestHasteSelectQuest(active, available, complete, accept)
+	local completed, known = self:GetQuestLogCompletionMap()
 
-	local completed = self:GetCompletedQuestLogTitles()
 	for k = 1, table.getn(active) do
 		local quest = active[k]
-		if completed[quest[1]] then
+		if self:IsActiveQuestCompletable(quest, completed, known) then
 			complete(quest[2])
 			return true
 		end
@@ -468,8 +565,9 @@ function Automaton_Gossip:ProcessGossip(count, options)
 	return services
 end
 
-function Automaton_Gossip:ProcessQuestList(count, stride, values)
+function Automaton_Gossip:ProcessQuestList(count, stride, values, completeOffset)
 	local quests = {}
+	local completed, known
 	values = values or {}
 	count = count or 0
 	for k = 1, count do
@@ -477,7 +575,17 @@ function Automaton_Gossip:ProcessQuestList(count, stride, values)
 		local title, level = values[i], values[i+1]
 		if QuestData[title] then
 			if self:HasRequiredQuestItems(title) then
-				tinsert(quests, {title, level, k})
+				local quest = {title, level, k}
+				if not completeOffset then
+					tinsert(quests, quest)
+				else
+					if not completed then
+						completed, known = self:GetQuestLogCompletionMap()
+					end
+					if self:IsActiveQuestCompletable(quest, completed, known, values[i+completeOffset]) then
+						tinsert(quests, quest)
+					end
+				end
 			end
 		end
 	end
