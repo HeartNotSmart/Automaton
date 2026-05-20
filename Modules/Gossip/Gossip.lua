@@ -354,7 +354,7 @@ function Automaton_Gossip:GetQuestLogEntryInfo(index)
 end
 
 function Automaton_Gossip:IsCompleteValue(value)
-	return value == true or value == 1
+	return value == true or value == 1 or value == "1" or value == "true" or value == "complete" or value == "COMPLETE" or value == "completed" or value == "COMPLETED"
 end
 
 function Automaton_Gossip:HasRequiredItems(items)
@@ -386,11 +386,16 @@ function Automaton_Gossip:HasRequiredQuestItems(title)
 end
 
 function Automaton_Gossip:IsQuestLogEntryComplete(index, title, isHeader, isComplete)
-	if not title or isHeader or not self:IsCompleteValue(isComplete) then
+	if not title or isHeader then
 		return false
 	end
 
-	for k = 1, (GetNumQuestLeaderBoards(index) or 0) do
+	local objectives = GetNumQuestLeaderBoards(index) or 0
+	if not self:IsCompleteValue(isComplete) and objectives == 0 then
+		return false
+	end
+
+	for k = 1, objectives do
 		local text, objectiveType, finished = GetQuestLogLeaderBoard(k, index)
 		if text and not self:IsCompleteValue(finished) then
 			return false
@@ -444,19 +449,23 @@ function Automaton_Gossip:IsActiveQuestCompletable(quest, completed, known, comp
 		return false
 	end
 
-	if completed and completed[title] then
-		return true
-	end
-
-	if known and known[title] then
-		return false
-	end
-
 	if completeValue == nil then
 		completeValue = quest[3]
 	end
 
-	return self:IsCompleteValue(completeValue)
+	if self:IsCompleteValue(completeValue) then
+		return true
+	end
+
+	if completed and completed[title] then
+		return true
+	end
+
+	if completeValue ~= nil or (known and known[title]) then
+		return false
+	end
+
+	return false
 end
 
 function Automaton_Gossip:IsQuestLogFull()
