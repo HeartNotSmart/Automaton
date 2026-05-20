@@ -36,6 +36,17 @@ local function GetGossipQuestList(counter, getter, stride)
 	return count or 0, quests
 end
 
+local function NormalizeQuestTitle(title)
+	if not title then
+		return nil
+	end
+	title = string.gsub(title, "|c%x%x%x%x%x%x%x%x", "")
+	title = string.gsub(title, "|r", "")
+	title = string.gsub(title, "^%s+", "")
+	title = string.gsub(title, "%s+$", "")
+	return title
+end
+
 ----------------------------------
 --      Module Declaration      --
 ----------------------------------
@@ -159,30 +170,38 @@ function Automaton_Gossip:GetMaxTableIndex(values)
 	return max
 end
 
-function Automaton_Gossip:GetGossipQuestOptions(getter)
+function Automaton_Gossip:GetGossipQuestOptions(getter, preferredStride)
 	local values = {}
 	if getter then
 		values = { getter() }
 	end
 
 	local quests = {}
-	local optionIndex = 0
 	local max = self:GetMaxTableIndex(values)
-	for k = 1, max do
-		if type(values[k]) == "string" then
-			optionIndex = optionIndex + 1
-			tinsert(quests, {values[k], optionIndex, nil, values[k+1]})
+	local stride = preferredStride or 3
+	if type(values[3]) == "string" then
+		stride = 2
+	elseif type(values[4]) == "string" then
+		stride = 3
+	elseif type(values[5]) == "string" then
+		stride = 4
+	end
+
+	for k = 1, max, stride do
+		local title = values[k]
+		if type(title) == "string" then
+			tinsert(quests, {title, (k + stride - 1) / stride, values[k+2], values[k+1]})
 		end
 	end
 	return quests
 end
 
 function Automaton_Gossip:GetGossipAvailableQuestOptions()
-	return self:GetGossipQuestOptions(GetGossipAvailableQuests)
+	return self:GetGossipQuestOptions(GetGossipAvailableQuests, 3)
 end
 
 function Automaton_Gossip:GetGossipActiveQuestOptions()
-	return self:GetGossipQuestOptions(GetGossipActiveQuests)
+	return self:GetGossipQuestOptions(GetGossipActiveQuests, 4)
 end
 
 function Automaton_Gossip:HasGossipQuests()
@@ -380,14 +399,20 @@ end
 
 function Automaton_Gossip:GetQuestLogEntryInfo(index)
 	local title, level, tag, fourth, fifth, sixth, seventh = GetQuestLogTitle(index)
-	if seventh ~= nil or type(fourth) == "number" or (fourth == nil and fifth == true) then
+	if type(fourth) == "number" then
+		if seventh ~= nil then
+			return title, fifth, sixth, seventh
+		end
+		return title, fifth, nil, sixth
+	end
+	if seventh ~= nil then
 		return title, fifth, sixth, seventh
 	end
 	return title, fourth, fifth, sixth
 end
 
 function Automaton_Gossip:IsCompleteValue(value)
-	return value == true or value == 1 or value == "1" or value == "true" or value == "complete" or value == "COMPLETE" or value == "completed" or value == "COMPLETED"
+	return value == true or value == 1 or value == "1"
 end
 
 function Automaton_Gossip:HasRequiredItems(items)
@@ -423,19 +448,7 @@ function Automaton_Gossip:IsQuestLogEntryComplete(index, title, isHeader, isComp
 		return false
 	end
 
-	local objectives = GetNumQuestLeaderBoards(index) or 0
-	if not self:IsCompleteValue(isComplete) and objectives == 0 then
-		return false
-	end
-
-	for k = 1, objectives do
-		local text, objectiveType, finished = GetQuestLogLeaderBoard(k, index)
-		if text and not self:IsCompleteValue(finished) then
-			return false
-		end
-	end
-
-	return self:HasRequiredQuestItems(title)
+	return self:IsCompleteValue(isComplete) and self:HasRequiredQuestItems(title)
 end
 
 function Automaton_Gossip:GetQuestLogCompletionMap()
@@ -454,6 +467,7 @@ function Automaton_Gossip:GetQuestLogCompletionMap()
 	for k = 1, GetNumQuestLogEntries() do
 		local title, isHeader, isCollapsed, isComplete = self:GetQuestLogEntryInfo(k)
 		if title and not isHeader then
+			title = NormalizeQuestTitle(title)
 			known[title] = true
 			if self:IsQuestLogEntryComplete(k, title, isHeader, isComplete) then
 				completed[title] = true
@@ -477,28 +491,12 @@ function Automaton_Gossip:GetCompletedQuestLogTitles()
 end
 
 function Automaton_Gossip:IsActiveQuestCompletable(quest, completed, known, completeValue)
-	local title = quest and quest[1]
+	local title = NormalizeQuestTitle(quest and quest[1])
 	if not title or not self:HasRequiredQuestItems(title) then
 		return false
 	end
 
-	if completeValue == nil then
-		completeValue = quest[3]
-	end
-
-	if self:IsCompleteValue(completeValue) then
-		return true
-	end
-
-	if completed and completed[title] then
-		return true
-	end
-
-	if completeValue ~= nil or (known and known[title]) then
-		return false
-	end
-
-	return false
+	return completed and completed[title]
 end
 
 function Automaton_Gossip:IsQuestLogFull()
@@ -535,6 +533,10 @@ function Automaton_Gossip:QuestHasteSelectQuest(active, available, complete, acc
 			complete(quest[2])
 			return true
 		end
+	end
+
+	if table.getn(active) > 0 then
+		return false
 	end
 
 	if table.getn(available) > 0 then
