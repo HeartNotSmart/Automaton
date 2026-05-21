@@ -91,6 +91,17 @@ local function GetGossipQuestCompleteValue(values, index, stride)
 	return values[index+2]
 end
 
+local function GetOddIndexedValues(values)
+	local result = {}
+	values = values or {}
+	for k = 1, table.getn(values) do
+		if math.mod(k, 2) ~= 0 then
+			tinsert(result, values[k])
+		end
+	end
+	return result
+end
+
 ----------------------------------
 --      Module Declaration      --
 ----------------------------------
@@ -160,8 +171,8 @@ function Automaton_Gossip:GOSSIP_SHOW()
 	if IsShiftKeyDown() then return end
 
 	local gossipCount, gossipOptions = self:GetGossipOptionList()
-	local activeQuests = self:GetGossipActiveQuestOptions()
-	local availableQuests = self:GetGossipAvailableQuestOptions()
+	local activeQuests = self:GetQuestHasteGossipActiveQuestTitles()
+	local availableQuests = self:GetQuestHasteGossipAvailableQuestTitles()
 	self:Debug("GOSSIP_SHOW: "..gossipCount.." gossip options.")
 
 	if self.db.profile.questHaste and self:QuestHasteGossip(activeQuests, availableQuests, gossipCount, gossipOptions) then
@@ -268,6 +279,30 @@ end
 
 function Automaton_Gossip:GetGossipActiveQuestOptions()
 	return self:GetGossipQuestOptions(GetNumGossipActiveQuests, GetGossipActiveQuests, 4, true)
+end
+
+function Automaton_Gossip:GetQuestHasteGossipQuestTitles(getter)
+	local values = {}
+	if getter then
+		values = { getter() }
+	end
+
+	local titles = {}
+	local oddValues = GetOddIndexedValues(values)
+	for k = 1, table.getn(oddValues) do
+		if type(oddValues[k]) == "string" then
+			tinsert(titles, {NormalizeQuestTitle(oddValues[k]), k})
+		end
+	end
+	return titles
+end
+
+function Automaton_Gossip:GetQuestHasteGossipAvailableQuestTitles()
+	return self:GetQuestHasteGossipQuestTitles(GetGossipAvailableQuests)
+end
+
+function Automaton_Gossip:GetQuestHasteGossipActiveQuestTitles()
+	return self:GetQuestHasteGossipQuestTitles(GetGossipActiveQuests)
 end
 
 function Automaton_Gossip:HasGossipQuests()
@@ -492,7 +527,9 @@ function Automaton_Gossip:QUEST_COMPLETE()
 end
 
 function Automaton_Gossip:QuestHasteGossip(active, available, gossipCount, gossipOptions)
-	if self:QuestHasteSelectQuest(active or self:GetGossipActiveQuestOptions(), available or self:GetGossipAvailableQuestOptions(), SelectGossipActiveQuest, SelectGossipAvailableQuest, gossipCount, gossipOptions) then
+	active = active or self:GetQuestHasteGossipActiveQuestTitles()
+	available = available or self:GetQuestHasteGossipAvailableQuestTitles()
+	if self:QuestHasteSelectQuest(active, available, SelectGossipActiveQuest, SelectGossipAvailableQuest, gossipCount, gossipOptions) then
 		return true
 	end
 	return false
