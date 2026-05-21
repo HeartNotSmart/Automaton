@@ -782,6 +782,18 @@ function Automaton_Gossip:GetCompletedQuestLogTitles()
 	return completed
 end
 
+function Automaton_Gossip:GetQuestHasteCompletedQuestLogTitles()
+	local completed = {}
+	for k = 1, GetNumQuestLogEntries() do
+		local title, level, tag, group, header, isComplete = GetQuestLogTitle(k)
+		title = NormalizeQuestTitle(title)
+		if title and isComplete then
+			completed[title] = true
+		end
+	end
+	return completed
+end
+
 function Automaton_Gossip:IsActiveQuestCompletable(quest, completed, known, completeValue)
 	local title = NormalizeQuestTitle(quest and quest[1])
 	if not title then
@@ -897,7 +909,8 @@ function Automaton_Gossip:QuestHasteSelectFirstActiveQuest(active, complete)
 end
 
 function Automaton_Gossip:QuestHasteSelectQuest(active, available, complete, accept, gossipCount, gossipOptions)
-	local completed, known = self:GetQuestLogCompletionMap()
+	local completed = self:GetQuestHasteCompletedQuestLogTitles()
+	local known = nil
 
 	if self:QuestHasteSelectActiveQuest(active, complete, completed, known) then
 		return true
