@@ -885,6 +885,17 @@ function Automaton_Gossip:QuestHasteAcceptAvailableQuest(available, accept)
 	return false
 end
 
+function Automaton_Gossip:QuestHasteSelectFirstActiveQuest(active, complete)
+	active = active or {}
+	if table.getn(active) > 0 then
+		self:Debug("AutoActiveQuest fallback: "..tostring(active[1][1]))
+		complete(active[1][2])
+		return true
+	end
+
+	return false
+end
+
 function Automaton_Gossip:QuestHasteSelectQuest(active, available, complete, accept, gossipCount, gossipOptions)
 	local completed, known = self:GetQuestLogCompletionMap()
 
@@ -896,7 +907,11 @@ function Automaton_Gossip:QuestHasteSelectQuest(active, available, complete, acc
 		return true
 	end
 
-	return self:QuestHasteAcceptAvailableQuest(available, accept)
+	if self:QuestHasteAcceptAvailableQuest(available, accept) then
+		return true
+	end
+
+	return self:QuestHasteSelectFirstActiveQuest(active, complete)
 end
 
 function Automaton_Gossip:QuestHasteCompleteReward()
