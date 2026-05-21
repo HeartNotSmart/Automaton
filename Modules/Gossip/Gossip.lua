@@ -761,7 +761,7 @@ function Automaton_Gossip:IsActiveQuestObjectivesComplete(quest, completed, know
 	end
 
 	if self:IsCompleteValue(completeValue) then
-		return not known or known[title]
+		return true
 	end
 
 	return completed and completed[title]
