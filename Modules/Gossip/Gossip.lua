@@ -217,13 +217,7 @@ function Automaton_Gossip:GetGossipQuestOptions(counter, getter, preferredStride
 	if count and count > 0 and max > 0 then
 		local inferredStride = max / count
 		if inferredStride == math.floor(inferredStride) and inferredStride >= 2 then
-			local useInferredStride = true
-			if hasCompleteValue and preferredStride and inferredStride < preferredStride then
-				useInferredStride = type(values[inferredStride+1]) == "string"
-			end
-			if useInferredStride then
-				stride = inferredStride
-			end
+			stride = inferredStride
 		end
 	else
 		if type(values[3]) == "string" then
@@ -475,6 +469,12 @@ function Automaton_Gossip:QUEST_PROGRESS()
 	if not self.db.profile.questHaste or IsShiftKeyDown() then return end
 	if IsQuestCompletable() then
 		CompleteQuest()
+	else
+		local title = NormalizeQuestTitle(GetTitleText())
+		local completed = self:GetQuestLogCompletionMap()
+		if title and completed[title] and not self:HasRequiredQuestItems(title) then
+			self:NotifyBankItemsForQuest(title)
+		end
 	end
 end
 
