@@ -79,6 +79,18 @@ local function GetItemNameFromLink(link)
 	return linkedName
 end
 
+local function GetGossipQuestCompleteValue(values, index, stride)
+	if stride == 2 and type(values[index+1]) == "boolean" then
+		return values[index+1]
+	end
+
+	if stride >= 4 then
+		return values[index+3]
+	end
+
+	return values[index+2]
+end
+
 ----------------------------------
 --      Module Declaration      --
 ----------------------------------
@@ -152,7 +164,7 @@ function Automaton_Gossip:GOSSIP_SHOW()
 	local availableQuests = self:GetGossipAvailableQuestOptions()
 	self:Debug("GOSSIP_SHOW: "..gossipCount.." gossip options.")
 
-	if self.db.profile.questHaste and self:QuestHasteGossip(activeQuests, availableQuests) then
+	if self.db.profile.questHaste and self:QuestHasteGossip(activeQuests, availableQuests, gossipCount, gossipOptions) then
 		self:Debug("Quest automation handled gossip event.")
 		return
 	end
@@ -242,11 +254,7 @@ function Automaton_Gossip:GetGossipQuestOptions(counter, getter, preferredStride
 		if type(title) == "string" then
 			local completeValue = nil
 			if hasCompleteValue then
-				if stride >= 4 then
-					completeValue = values[k+3]
-				else
-					completeValue = values[k+2]
-				end
+				completeValue = GetGossipQuestCompleteValue(values, k, stride)
 			end
 			tinsert(quests, {NormalizeQuestTitle(title), optionIndex, completeValue, values[k+1]})
 		end
@@ -483,8 +491,8 @@ function Automaton_Gossip:QUEST_COMPLETE()
 	self:QuestHasteCompleteReward()
 end
 
-function Automaton_Gossip:QuestHasteGossip(active, available)
-	if self:QuestHasteSelectQuest(active or self:GetGossipActiveQuestOptions(), available or self:GetGossipAvailableQuestOptions(), SelectGossipActiveQuest, SelectGossipAvailableQuest) then
+function Automaton_Gossip:QuestHasteGossip(active, available, gossipCount, gossipOptions)
+	if self:QuestHasteSelectQuest(active or self:GetGossipActiveQuestOptions(), available or self:GetGossipAvailableQuestOptions(), SelectGossipActiveQuest, SelectGossipAvailableQuest, gossipCount, gossipOptions) then
 		return true
 	end
 	return false
@@ -792,9 +800,8 @@ function Automaton_Gossip:NotifyQuestLogFull()
 	PlaySound("igQuestFailed")
 end
 
-function Automaton_Gossip:QuestHasteSelectQuest(active, available, complete, accept)
-	local completed, known = self:GetQuestLogCompletionMap()
-
+function Automaton_Gossip:QuestHasteSelectActiveQuest(active, complete, completed, known)
+	active = active or {}
 	for k = 1, table.getn(active) do
 		local quest = active[k]
 		if self:IsActiveQuestCompletable(quest, completed, known) then
@@ -805,6 +812,30 @@ function Automaton_Gossip:QuestHasteSelectQuest(active, available, complete, acc
 		end
 	end
 
+	return false
+end
+
+function Automaton_Gossip:QuestHasteSelectCompletedGossipOption(count, options, completed)
+	options = options or {}
+	count = count or table.getn(options) / 2
+	for k = 1, count do
+		local i = (k-1)*2 + 1
+		local title = NormalizeQuestTitle(options[i])
+		if title and completed and completed[title] then
+			if self:HasRequiredQuestItems(title) then
+				self:Debug("AutoQuestGossip: "..title)
+				SelectGossipOption(k)
+				return true
+			end
+			self:NotifyBankItemsForQuest(title)
+		end
+	end
+
+	return false
+end
+
+function Automaton_Gossip:QuestHasteAcceptAvailableQuest(available, accept)
+	available = available or {}
 	if table.getn(available) > 0 then
 		if self:IsQuestLogFull() then
 			self:NotifyQuestLogFull()
@@ -815,6 +846,20 @@ function Automaton_Gossip:QuestHasteSelectQuest(active, available, complete, acc
 	end
 
 	return false
+end
+
+function Automaton_Gossip:QuestHasteSelectQuest(active, available, complete, accept, gossipCount, gossipOptions)
+	local completed, known = self:GetQuestLogCompletionMap()
+
+	if self:QuestHasteSelectActiveQuest(active, complete, completed, known) then
+		return true
+	end
+
+	if self:QuestHasteSelectCompletedGossipOption(gossipCount, gossipOptions, completed) then
+		return true
+	end
+
+	return self:QuestHasteAcceptAvailableQuest(available, accept)
 end
 
 function Automaton_Gossip:QuestHasteCompleteReward()
