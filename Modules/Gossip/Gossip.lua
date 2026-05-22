@@ -171,8 +171,8 @@ function Automaton_Gossip:GOSSIP_SHOW()
 	if IsShiftKeyDown() then return end
 
 	local gossipCount, gossipOptions = self:GetGossipOptionList()
-	local activeQuests = self:GetQuestHasteGossipActiveQuestTitles()
-	local availableQuests = self:GetQuestHasteGossipAvailableQuestTitles()
+	local activeQuests = self:GetGossipActiveQuestOptions()
+	local availableQuests = self:GetGossipAvailableQuestOptions()
 	self:Debug("GOSSIP_SHOW: "..gossipCount.." gossip options.")
 
 	if self.db.profile.questHaste and self:QuestHasteGossip(activeQuests, availableQuests, gossipCount, gossipOptions) then
@@ -298,11 +298,11 @@ function Automaton_Gossip:GetQuestHasteGossipQuestTitles(getter)
 end
 
 function Automaton_Gossip:GetQuestHasteGossipAvailableQuestTitles()
-	return self:GetQuestHasteGossipQuestTitles(GetGossipAvailableQuests)
+	return self:GetGossipAvailableQuestOptions()
 end
 
 function Automaton_Gossip:GetQuestHasteGossipActiveQuestTitles()
-	return self:GetQuestHasteGossipQuestTitles(GetGossipActiveQuests)
+	return self:GetGossipActiveQuestOptions()
 end
 
 function Automaton_Gossip:HasGossipQuests()
@@ -527,8 +527,8 @@ function Automaton_Gossip:QUEST_COMPLETE()
 end
 
 function Automaton_Gossip:QuestHasteGossip(active, available, gossipCount, gossipOptions)
-	active = active or self:GetQuestHasteGossipActiveQuestTitles()
-	available = available or self:GetQuestHasteGossipAvailableQuestTitles()
+	active = active or self:GetGossipActiveQuestOptions()
+	available = available or self:GetGossipAvailableQuestOptions()
 	if self:QuestHasteSelectQuest(active, available, SelectGossipActiveQuest, SelectGossipAvailableQuest, gossipCount, gossipOptions) then
 		return true
 	end
@@ -785,9 +785,9 @@ end
 function Automaton_Gossip:GetQuestHasteCompletedQuestLogTitles()
 	local completed = {}
 	for k = 1, GetNumQuestLogEntries() do
-		local title, level, tag, group, header, isComplete = GetQuestLogTitle(k)
+		local title, isHeader, isCollapsed, isComplete = self:GetQuestLogEntryInfo(k)
 		title = NormalizeQuestTitle(title)
-		if title and isComplete then
+		if title and not isHeader and self:IsCompleteValue(isComplete) then
 			completed[title] = true
 		end
 	end
