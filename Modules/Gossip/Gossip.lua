@@ -79,6 +79,29 @@ local function GetItemNameFromLink(link)
 	return linkedName
 end
 
+local function GetGossipQuestCompleteValue(values, index, stride)
+	if stride == 2 and type(values[index+1]) == "boolean" then
+		return values[index+1]
+	end
+
+	if stride >= 4 then
+		return values[index+3]
+	end
+
+	return values[index+2]
+end
+
+local function GetOddIndexedValues(values)
+	local result = {}
+	values = values or {}
+	for k = 1, table.getn(values) do
+		if math.mod(k, 2) ~= 0 then
+			tinsert(result, values[k])
+		end
+	end
+	return result
+end
+
 ----------------------------------
 --      Module Declaration      --
 ----------------------------------
@@ -152,7 +175,7 @@ function Automaton_Gossip:GOSSIP_SHOW()
 	local availableQuests = self:GetGossipAvailableQuestOptions()
 	self:Debug("GOSSIP_SHOW: "..gossipCount.." gossip options.")
 
-	if self.db.profile.questHaste and self:QuestHasteGossip(activeQuests, availableQuests) then
+	if self.db.profile.questHaste and self:QuestHasteGossip(activeQuests, availableQuests, gossipCount, gossipOptions) then
 		self:Debug("Quest automation handled gossip event.")
 		return
 	end
@@ -217,13 +240,7 @@ function Automaton_Gossip:GetGossipQuestOptions(counter, getter, preferredStride
 	if count and count > 0 and max > 0 then
 		local inferredStride = max / count
 		if inferredStride == math.floor(inferredStride) and inferredStride >= 2 then
-			local useInferredStride = true
-			if hasCompleteValue and preferredStride and inferredStride < preferredStride then
-				useInferredStride = type(values[inferredStride+1]) == "string"
-			end
-			if useInferredStride then
-				stride = inferredStride
-			end
+			stride = inferredStride
 		end
 	else
 		if type(values[3]) == "string" then
@@ -248,11 +265,7 @@ function Automaton_Gossip:GetGossipQuestOptions(counter, getter, preferredStride
 		if type(title) == "string" then
 			local completeValue = nil
 			if hasCompleteValue then
-				if stride >= 4 then
-					completeValue = values[k+3]
-				else
-					completeValue = values[k+2]
-				end
+				completeValue = GetGossipQuestCompleteValue(values, k, stride)
 			end
 			tinsert(quests, {NormalizeQuestTitle(title), optionIndex, completeValue, values[k+1]})
 		end
@@ -266,6 +279,30 @@ end
 
 function Automaton_Gossip:GetGossipActiveQuestOptions()
 	return self:GetGossipQuestOptions(GetNumGossipActiveQuests, GetGossipActiveQuests, 4, true)
+end
+
+function Automaton_Gossip:GetQuestHasteGossipQuestTitles(getter)
+	local values = {}
+	if getter then
+		values = { getter() }
+	end
+
+	local titles = {}
+	local oddValues = GetOddIndexedValues(values)
+	for k = 1, table.getn(oddValues) do
+		if type(oddValues[k]) == "string" then
+			tinsert(titles, {NormalizeQuestTitle(oddValues[k]), k})
+		end
+	end
+	return titles
+end
+
+function Automaton_Gossip:GetQuestHasteGossipAvailableQuestTitles()
+	return self:GetGossipAvailableQuestOptions()
+end
+
+function Automaton_Gossip:GetQuestHasteGossipActiveQuestTitles()
+	return self:GetGossipActiveQuestOptions()
 end
 
 function Automaton_Gossip:HasGossipQuests()
@@ -475,6 +512,12 @@ function Automaton_Gossip:QUEST_PROGRESS()
 	if not self.db.profile.questHaste or IsShiftKeyDown() then return end
 	if IsQuestCompletable() then
 		CompleteQuest()
+	else
+		local title = NormalizeQuestTitle(GetTitleText())
+		local completed = self:GetQuestLogCompletionMap()
+		if title and completed[title] and not self:HasRequiredQuestItems(title) then
+			self:NotifyBankItemsForQuest(title)
+		end
 	end
 end
 
@@ -483,8 +526,10 @@ function Automaton_Gossip:QUEST_COMPLETE()
 	self:QuestHasteCompleteReward()
 end
 
-function Automaton_Gossip:QuestHasteGossip(active, available)
-	if self:QuestHasteSelectQuest(active or self:GetGossipActiveQuestOptions(), available or self:GetGossipAvailableQuestOptions(), SelectGossipActiveQuest, SelectGossipAvailableQuest) then
+function Automaton_Gossip:QuestHasteGossip(active, available, gossipCount, gossipOptions)
+	active = active or self:GetGossipActiveQuestOptions()
+	available = available or self:GetGossipAvailableQuestOptions()
+	if self:QuestHasteSelectQuest(active, available, SelectGossipActiveQuest, SelectGossipAvailableQuest, gossipCount, gossipOptions) then
 		return true
 	end
 	return false
@@ -737,6 +782,18 @@ function Automaton_Gossip:GetCompletedQuestLogTitles()
 	return completed
 end
 
+function Automaton_Gossip:GetQuestHasteCompletedQuestLogTitles()
+	local completed = {}
+	for k = 1, GetNumQuestLogEntries() do
+		local title, isHeader, isCollapsed, isComplete = self:GetQuestLogEntryInfo(k)
+		title = NormalizeQuestTitle(title)
+		if title and not isHeader and self:IsCompleteValue(isComplete) then
+			completed[title] = true
+		end
+	end
+	return completed
+end
+
 function Automaton_Gossip:IsActiveQuestCompletable(quest, completed, known, completeValue)
 	local title = NormalizeQuestTitle(quest and quest[1])
 	if not title then
@@ -761,7 +818,7 @@ function Automaton_Gossip:IsActiveQuestObjectivesComplete(quest, completed, know
 	end
 
 	if self:IsCompleteValue(completeValue) then
-		return not known or known[title]
+		return true
 	end
 
 	return completed and completed[title]
@@ -792,9 +849,8 @@ function Automaton_Gossip:NotifyQuestLogFull()
 	PlaySound("igQuestFailed")
 end
 
-function Automaton_Gossip:QuestHasteSelectQuest(active, available, complete, accept)
-	local completed, known = self:GetQuestLogCompletionMap()
-
+function Automaton_Gossip:QuestHasteSelectActiveQuest(active, complete, completed, known)
+	active = active or {}
 	for k = 1, table.getn(active) do
 		local quest = active[k]
 		if self:IsActiveQuestCompletable(quest, completed, known) then
@@ -805,6 +861,30 @@ function Automaton_Gossip:QuestHasteSelectQuest(active, available, complete, acc
 		end
 	end
 
+	return false
+end
+
+function Automaton_Gossip:QuestHasteSelectCompletedGossipOption(count, options, completed)
+	options = options or {}
+	count = count or table.getn(options) / 2
+	for k = 1, count do
+		local i = (k-1)*2 + 1
+		local title = NormalizeQuestTitle(options[i])
+		if title and completed and completed[title] then
+			if self:HasRequiredQuestItems(title) then
+				self:Debug("AutoQuestGossip: "..title)
+				SelectGossipOption(k)
+				return true
+			end
+			self:NotifyBankItemsForQuest(title)
+		end
+	end
+
+	return false
+end
+
+function Automaton_Gossip:QuestHasteAcceptAvailableQuest(available, accept)
+	available = available or {}
 	if table.getn(available) > 0 then
 		if self:IsQuestLogFull() then
 			self:NotifyQuestLogFull()
@@ -815,6 +895,36 @@ function Automaton_Gossip:QuestHasteSelectQuest(active, available, complete, acc
 	end
 
 	return false
+end
+
+function Automaton_Gossip:QuestHasteSelectFirstActiveQuest(active, complete)
+	active = active or {}
+	if table.getn(active) > 0 then
+		self:Debug("AutoActiveQuest fallback: "..tostring(active[1][1]))
+		complete(active[1][2])
+		return true
+	end
+
+	return false
+end
+
+function Automaton_Gossip:QuestHasteSelectQuest(active, available, complete, accept, gossipCount, gossipOptions)
+	local completed = self:GetQuestHasteCompletedQuestLogTitles()
+	local known = nil
+
+	if self:QuestHasteSelectActiveQuest(active, complete, completed, known) then
+		return true
+	end
+
+	if self:QuestHasteSelectCompletedGossipOption(gossipCount, gossipOptions, completed) then
+		return true
+	end
+
+	if self:QuestHasteAcceptAvailableQuest(available, accept) then
+		return true
+	end
+
+	return self:QuestHasteSelectFirstActiveQuest(active, complete)
 end
 
 function Automaton_Gossip:QuestHasteCompleteReward()
