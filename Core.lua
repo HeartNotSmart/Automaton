@@ -68,6 +68,18 @@ waterfall:Register('Automaton', 'aceOptions', Automaton.options, 'title','Automa
 function Automaton:OnInitialize()
 end
 
+function Automaton:OnEnable()
+	local version
+	if GetAddOnMetadata then
+		version = GetAddOnMetadata("Automaton", "Version")
+	end
+	version = version or self.version
+
+	if DEFAULT_CHAT_FRAME then
+		DEFAULT_CHAT_FRAME:AddMessage("Automaton version "..tostring(version or "unknown"), 1, 1, 1)
+	end
+end
+
 function Automaton:SetDisabledAsDefault(object,name)
 	if object.db.profile.disabled then
 		object.db.profile.disabled = false
